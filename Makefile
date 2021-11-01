@@ -161,6 +161,7 @@ UPROGS += \
 	$U/_trace\
 	$U/_sysinfo\
 	$U/_sysinfotest\
+endif
 
 ifeq ($(LAB),trap)
 UPROGS += \
