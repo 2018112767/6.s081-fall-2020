@@ -149,6 +149,8 @@ UPROGS=\
 	$U/_grind\
 	$U/_wc\
 	$U/_zombie\
+<<<<<<< Updated upstream
+=======
     $U/_copy\
 	$U/_pingpong\
 	$U/_sleep\
@@ -156,12 +158,12 @@ UPROGS=\
 	$U/_find\
 	$U/_xargs\
 
-
 ifeq ($(LAB),syscall)
 UPROGS += \
+>>>>>>> Stashed changes
 	$U/_trace\
-	$U/_sysinfotest
-endif
+	$U/_sysinfo\
+	$U/_sysinfotest\
 
 ifeq ($(LAB),trap)
 UPROGS += \
