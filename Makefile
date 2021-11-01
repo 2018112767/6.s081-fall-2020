@@ -149,6 +149,24 @@ UPROGS=\
 	$U/_grind\
 	$U/_wc\
 	$U/_zombie\
+<<<<<<< Updated upstream
+=======
+<<<<<<< Updated upstream
+=======
+    $U/_copy\
+	$U/_pingpong\
+	$U/_sleep\
+	$U/_primes\
+	$U/_find\
+	$U/_xargs\
+
+ifeq ($(LAB),syscall)
+UPROGS += \
+>>>>>>> Stashed changes
+	$U/_trace\
+	$U/_sysinfo\
+	$U/_sysinfotest\
+>>>>>>> Stashed changes
 
 
 ifeq ($(LAB),syscall)
@@ -303,3 +321,4 @@ myapi.key:
 
 
 .PHONY: handin tarball tarball-pref clean grade handin-check
+
