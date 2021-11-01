@@ -277,6 +277,8 @@ fork(void)
 
   np->parent = p;
 
+  safestrcpy(np->mask,p->mask,sizeof(p->mask));
+
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
 
@@ -692,4 +694,16 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+int 
+procnum(void)
+{
+  struct proc *p;
+  int num=0;
+  for(p=proc;p<&proc[NPROC];p++)
+  {
+    num=num+(p->state!=UNUSED);
+  }
+  return num;
 }
