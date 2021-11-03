@@ -5,6 +5,8 @@
 #include "riscv.h"
 #include "defs.h"
 #include "fs.h"
+#include "spinlock.h"
+#include "proc.h"
 
 /*
  * the kernel's page table.
@@ -21,30 +23,10 @@ extern char trampoline[]; // trampoline.S
 void
 kvminit()
 {
-  kernel_pagetable = (pagetable_t) kalloc();
-  memset(kernel_pagetable, 0, PGSIZE);
-
-  // uart registers
-  kvmmap(UART0, UART0, PGSIZE, PTE_R | PTE_W);
-
-  // virtio mmio disk interface
-  kvmmap(VIRTIO0, VIRTIO0, PGSIZE, PTE_R | PTE_W);
+  kernel_pagetable = kvmmake();
 
   // CLINT
-  kvmmap(CLINT, CLINT, 0x10000, PTE_R | PTE_W);
-
-  // PLIC
-  kvmmap(PLIC, PLIC, 0x400000, PTE_R | PTE_W);
-
-  // map kernel text executable and read-only.
-  kvmmap(KERNBASE, KERNBASE, (uint64)etext-KERNBASE, PTE_R | PTE_X);
-
-  // map kernel data and the physical RAM we'll make use of.
-  kvmmap((uint64)etext, (uint64)etext, PHYSTOP-(uint64)etext, PTE_R | PTE_W);
-
-  // map the trampoline for trap entry/exit to
-  // the highest virtual address in the kernel.
-  kvmmap(TRAMPOLINE, (uint64)trampoline, PGSIZE, PTE_R | PTE_X);
+  mappages(kernel_pagetable, CLINT, 0x10000, CLINT, PTE_R | PTE_W);
 }
 
 // Switch h/w page table register to the kernel's page table,
@@ -132,7 +114,7 @@ kvmpa(uint64 va)
   pte_t *pte;
   uint64 pa;
   
-  pte = walk(kernel_pagetable, va, 0);
+  pte = walk(myproc()->kerneltbl, va, 0);
   if(pte == 0)
     panic("kvmpa");
   if((*pte & PTE_V) == 0)
@@ -373,6 +355,7 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
   return 0;
 }
 
+/*
 // Copy from user to kernel.
 // Copy len bytes to dst from virtual address srcva in a given page table.
 // Return 0 on success, -1 on error.
@@ -440,3 +423,97 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
     return -1;
   }
 }
+*/
+
+void 
+traversal_pt(pagetable_t pgtbl,int level)
+{
+  int i,j;
+  for(i=0;i<512;i++)
+  {
+    pte_t pte=pgtbl[i];
+    if(pte&PTE_V)
+    {
+      uint64 paddr=PTE2PA(pte);
+      for(j=1;j<=level;j++) printf("..");
+      printf("%d: pte %p pa %p\n",i,pte,paddr);
+      if(level<3)
+      {
+        traversal_pt((pagetable_t)paddr,level+1);
+      }
+    }
+  }
+}
+
+void 
+vmprint(pagetable_t pgtbl)
+{
+  printf("page table %p\n",pgtbl);
+  traversal_pt(pgtbl,1);
+}
+
+pagetable_t 
+kvmmake()
+{
+  pagetable_t kernel_pagetable = (pagetable_t) kalloc();
+  memset(kernel_pagetable, 0, PGSIZE);
+
+  // uart registers
+  mappages(kernel_pagetable, UART0, PGSIZE, UART0, PTE_R | PTE_W);
+
+  // virtio mmio disk interface
+  mappages(kernel_pagetable, VIRTIO0, PGSIZE, VIRTIO0, PTE_R | PTE_W);
+
+  // CLINT
+  //kvmmap(CLINT, CLINT, 0x10000, PTE_R | PTE_W);
+
+  // PLIC
+  mappages(kernel_pagetable, PLIC, 0x400000, PLIC, PTE_R | PTE_W);
+
+  // map kernel text executable and read-only.
+  mappages(kernel_pagetable, KERNBASE, (uint64)etext-KERNBASE, KERNBASE, PTE_R | PTE_X);
+
+  // map kernel data and the physical RAM we'll make use of.
+  mappages(kernel_pagetable, (uint64)etext, PHYSTOP-(uint64)etext, (uint64)etext, PTE_R | PTE_W);
+
+  // map the trampoline for trap entry/exit to
+  // the highest virtual address in the kernel.
+  mappages(kernel_pagetable, TRAMPOLINE, PGSIZE, (uint64)trampoline, PTE_R | PTE_X);
+
+  return kernel_pagetable;
+}
+
+void 
+uvmfree2(pagetable_t pagetable,uint64 va,uint npages)
+{
+  if(npages>0)
+    uvmunmap(pagetable,va,npages,1);
+  freewalk(pagetable);
+}
+
+void 
+proc_free_kernel_pagetable(uint64 kstack,pagetable_t pagetable,uint64 sz)
+{
+  uvmunmap(pagetable,UART0,1,0);
+  uvmunmap(pagetable,VIRTIO0,1,0);
+  uvmunmap(pagetable,PLIC,0x400000/PGSIZE,0);
+  uvmunmap(pagetable,KERNBASE,((uint64)etext-KERNBASE)/PGSIZE,0);
+  uvmunmap(pagetable,(uint64)etext,(PHYSTOP-(uint64)etext)/PGSIZE,0);
+  uvmunmap(pagetable,TRAMPOLINE,1,0);
+  uvmunmap(pagetable,0,PGROUNDUP(sz)/PGSIZE,0);
+
+  uvmfree2(pagetable,kstack,1);
+}
+
+int
+copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
+{
+  return copyin_new(pagetable,dst,srcva,len);
+}
+
+int
+copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
+{
+  return copyinstr_new(pagetable,dst,srcva,max);
+}
+
